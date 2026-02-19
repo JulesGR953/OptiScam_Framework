@@ -20,8 +20,8 @@ class TextExtractor:
 
         # Initialize TrOCR if fallback is enabled
         if use_trocr_fallback:
-            self.trocr_processor = TrOCRProcessor.from_pretrained('microsoft/trocr-base-printed')
-            self.trocr_model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-base-printed')
+            self.trocr_processor = TrOCRProcessor.from_pretrained('microsoft/trocr-small-printed')
+            self.trocr_model = VisionEncoderDecoderModel.from_pretrained('microsoft/trocr-small-printed')
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
             self.trocr_model.to(self.device)
 
@@ -32,7 +32,7 @@ class TextExtractor:
         :param image_path: Path to image file
         :return: List of tuples (bbox, text, confidence)
         """
-        result = self.rapid_ocr(image_path)
+        result, _ = self.rapid_ocr(image_path)
 
         if result is None or len(result) == 0:
             return []
@@ -42,7 +42,7 @@ class TextExtractor:
             if detection:
                 bbox = detection[0]  # Bounding box coordinates
                 text = detection[1]  # Detected text
-                confidence = detection[2]  # Confidence score
+                confidence = float(detection[2])  # Confidence score
                 detections.append({
                     'bbox': bbox,
                     'text': text,

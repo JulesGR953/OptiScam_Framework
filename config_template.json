@@ -1,0 +1,73 @@
+{
+  "description": "Configuration template for OptiScam video analysis system",
+
+  "image_processing": {
+    "clahe_clip_limit": 2.0,
+    "clahe_tile_grid_size": [8, 8],
+    "sharpness_threshold": 100.0,
+    "frame_interval": 30,
+    "use_sharpness_filter": true
+  },
+
+  "text_extraction": {
+    "use_trocr_fallback": true,
+    "trocr_confidence_threshold": 0.5,
+    "trocr_model": "microsoft/trocr-base-printed"
+  },
+
+  "audio_transcription": {
+    "whisper_model_size": "base",
+    "whisper_language": null,
+    "extract_audio": true,
+    "word_timestamps": true
+  },
+
+  "vision_model": {
+    "model_name": "Qwen/Qwen2-VL-2B-Instruct",
+    "max_new_tokens": 512,
+    "analyze_frames": true
+  },
+
+  "scam_detection": {
+    "custom_prompt": null,
+    "check_suspicious_urls": true,
+    "check_urgency_language": true,
+    "check_impersonation": true
+  },
+
+  "output": {
+    "output_dir": null,
+    "export_transcription": true,
+    "export_json": true,
+    "export_summary": true,
+    "transcription_format": "txt"
+  },
+
+  "performance": {
+    "device": null,
+    "batch_size": 4,
+    "num_workers": 4
+  },
+
+  "presets": {
+    "quick": {
+      "frame_interval": 60,
+      "whisper_model_size": "tiny",
+      "analyze_frames": false,
+      "use_trocr_fallback": false
+    },
+    "balanced": {
+      "frame_interval": 30,
+      "whisper_model_size": "base",
+      "analyze_frames": true,
+      "use_trocr_fallback": true
+    },
+    "high_quality": {
+      "frame_interval": 15,
+      "whisper_model_size": "medium",
+      "analyze_frames": true,
+      "use_trocr_fallback": true,
+      "sharpness_threshold": 150.0
+    }
+  }
+}

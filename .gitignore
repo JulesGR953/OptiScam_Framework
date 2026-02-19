@@ -1,4 +1,4 @@
-# Python
+# ── Python ──────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -20,61 +20,71 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# ── Virtual environments ─────────────────────────────────────
 venv/
 env/
 ENV/
-.venv
+.venv/
 
-# IDE
+# ── IDE ──────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# Model cache
+# ── Model / HuggingFace cache ────────────────────────────────
 models/
 .cache/
 transformers_cache/
+huggingface_cache/
 
-# Output directories
+# ── Output directories ───────────────────────────────────────
 output_*/
 frames_output/
 sampled_frames/
+
+# ── Video / audio files ──────────────────────────────────────
 *.mp4
 *.avi
 *.mov
 *.mkv
 *.mp3
 *.wav
+*.webm
 
-# Temporary files
+# ── Temporary files ──────────────────────────────────────────
 temp_audio.mp3
 *.tmp
 *.temp
 
-# OS
+# ── OS ───────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 desktop.ini
 
-# Logs
+# ── Logs ─────────────────────────────────────────────────────
 *.log
 
-# Jupyter
+# ── Jupyter ──────────────────────────────────────────────────
 .ipynb_checkpoints/
 *.ipynb
 
-# Results
+# ── Analysis output (JSON / TXT reports) ─────────────────────
+analysis_report.json
+holistic_analysis_report.json
+scam_analysis_summary.txt
+summary.txt
+transcription.txt
 results/
 analysis_results/
-*.json
-*.txt
-!requirements.txt
-!README.md
 
-# Images (except examples)
+# Whitelist project files
+!requirements.txt
+!config_template.json
+
+# ── Images (extracted frames) ────────────────────────────────
+frames/
 *.jpg
 *.jpeg
 *.png

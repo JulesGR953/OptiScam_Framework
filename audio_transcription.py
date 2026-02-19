@@ -1,6 +1,7 @@
 import whisper
 import os
 import json
+import torch
 from pathlib import Path
 
 class AudioTranscriber:
@@ -14,11 +15,11 @@ class AudioTranscriber:
         """
         self.model_size = model_size
         self.language = language
-        self.device = device
+        self.device = device if device else ("cuda" if torch.cuda.is_available() else "cpu")
 
-        print(f"Loading Whisper {model_size} model...")
-        self.model = whisper.load_model(model_size, device=device)
-        print(f"Whisper model loaded successfully")
+        print(f"Loading Whisper {model_size} model on {self.device}...")
+        self.model = whisper.load_model(model_size, device=self.device)
+        print(f"Whisper model loaded successfully on {self.device}")
 
     def extract_audio_from_video(self, video_path, output_audio_path=None):
         """

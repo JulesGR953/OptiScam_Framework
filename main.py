@@ -37,13 +37,15 @@ class OptiScamAnalyzer:
 
         # Audio transcription with Whisper
         self.audio_transcriber = AudioTranscriber(
-            model_size=self.config.get('whisper_model_size', 'base'),
-            language=self.config.get('whisper_language', None)
+            model_size=self.config.get('whisper_model_size', 'tiny'),
+            language=self.config.get('whisper_language', None),
+            device=self.config.get('device', None)
         )
 
         # Qwen3-VL-2B for visual analysis
         self.vision_model = Qwen3VLModel(
-            model_name=self.config.get('vision_model_name', 'Qwen/Qwen2-VL-2B-Instruct')
+            model_name=self.config.get('vision_model_name', 'unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit'),
+            device=self.config.get('device', None)
         )
 
         print("All components initialized successfully!\n")
@@ -438,9 +440,12 @@ def main():
                         help='Skip Qwen3-VL frame analysis [frame-by-frame mode]')
 
     # Common options
-    parser.add_argument('--whisper-model', type=str, default='base',
+    parser.add_argument('--whisper-model', type=str, default='tiny',
                         choices=['tiny', 'base', 'small', 'medium', 'large'],
                         help='Whisper model size (default: base)')
+    parser.add_argument('--device', type=str, default=None,
+                        choices=['cuda', 'cpu'],
+                        help='Device to run models on (default: auto-detect GPU)')
 
     args = parser.parse_args()
 
@@ -448,6 +453,7 @@ def main():
     config = {
         'sharpness_threshold': args.sharpness_threshold,
         'whisper_model_size': args.whisper_model,
+        'device': args.device,
     }
 
     # Initialize analyzer

@@ -1,352 +1,328 @@
-# OptiScam - Advanced Video Analysis System
+# OptiScam — Video Scam Detection System
 
-A comprehensive video analysis system that combines CLAHE image enhancement, Laplacian Variance sharpness filtering, RapidOCR + TrOCR text extraction, Whisper audio transcription, and Qwen3-VL-2B-Instruct visual understanding for detecting potential scams in videos.
+A multi-modal video analysis pipeline for detecting scams in short-form videos.
+Combines CLAHE image enhancement, dual OCR (RapidOCR + TrOCR), Whisper audio transcription,
+and Qwen3-VL-2B vision-language model inference with 4-bit quantization.
 
-## Features
+---
 
-### 1. **CLAHE Image Enhancement**
-- Applies Contrast Limited Adaptive Histogram Equalization (CLAHE) to improve frame quality
-- Works on both grayscale and color images (LAB color space)
-
-### 2. **Laplacian Variance Sharpness Filtering**
-- Automatically filters out blurry frames using Laplacian variance calculation
-- Ensures only sharp, high-quality frames are analyzed
-- Configurable sharpness threshold
-
-### 3. **Dual OCR System (RapidOCR + TrOCR)**
-- **RapidOCR**: Fast text detection and extraction
-- **TrOCR**: Fallback for low-confidence detections with higher accuracy
-- Tracks text with timestamps for timeline analysis
-- No text is missed per frame sample
-
-### 4. **Whisper Audio Transcription**
-- High-accuracy audio transcription using OpenAI's Whisper
-- Word-level timestamps for precise synchronization
-- Supports multiple languages with auto-detection
-- Works offline (no API keys required)
-
-### 5. **Qwen3-VL-2B-Instruct Visual Analysis**
-- State-of-the-art vision-language model for frame analysis
-- Scam detection with context from OCR and audio transcription
-- Identifies suspicious patterns, fake urgency, phishing attempts
-
-### 6. **Integrated Timeline**
-- Synchronized text, audio, and visual analysis per timestamp
-- Complete frame-by-frame breakdown
-- Exportable reports in JSON and human-readable formats
-
-## System Architecture
+## Architecture
 
 ```
 Video Input
-    ↓
-┌───────────────────────────────────────────────┐
-│  Image Processing (CLAHE + Sharpness Filter)  │
-│  - Extract frames at intervals                │
-│  - Apply CLAHE enhancement                    │
-│  - Filter by Laplacian Variance               │
-└───────────────────────────────────────────────┘
-    ↓
-┌───────────────────────────────────────────────┐
-│  Text Extraction (RapidOCR + TrOCR)          │
-│  - Primary: RapidOCR for speed               │
-│  - Fallback: TrOCR for accuracy              │
-│  - Timeline tracking per frame               │
-└───────────────────────────────────────────────┘
-    ↓
-┌───────────────────────────────────────────────┐
-│  Audio Transcription (Whisper)                │
-│  - Extract audio from video                   │
-│  - Word-level timestamp transcription         │
-│  - Multi-language support                     │
-└───────────────────────────────────────────────┘
-    ↓
-┌───────────────────────────────────────────────┐
-│  Visual Analysis (Qwen3-VL-2B-Instruct)       │
-│  - Context-aware frame analysis               │
-│  - Scam indicator detection                   │
-│  - Integration with OCR + Audio data          │
-└───────────────────────────────────────────────┘
-    ↓
-Comprehensive Report (JSON + Summary)
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  ImageProcessing                        │
+│  · Extract frames at interval           │
+│  · CLAHE enhancement (LAB color space)  │
+│  · Laplacian variance sharpness filter  │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  TextExtractor                          │
+│  · RapidOCR  (primary, fast)            │
+│  · TrOCR     (fallback, low-confidence) │
+│  · Timestamp-indexed detection list     │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  AudioTranscriber (Whisper)             │
+│  · FFmpeg audio extraction              │
+│  · Word-level timestamps                │
+│  · Multi-language auto-detect           │
+└─────────────────────────────────────────┘
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│  Qwen3VLModel                           │
+│  · 4-bit quantized (BNB)                │
+│  · Context-aware frame analysis         │
+│  · Holistic video analysis mode         │
+└─────────────────────────────────────────┘
+    │
+    ▼
+JSON report + human-readable summary
 ```
+
+See [CLASS_DIAGRAM.md](CLASS_DIAGRAM.md) for the full class diagram.
+
+---
+
+## Requirements
+
+- Python 3.10–3.14
+- NVIDIA GPU with 6 GB+ VRAM (strongly recommended — CPU inference is impractically slow)
+- CUDA Toolkit 12.x
+- FFmpeg installed as a system binary
+
+---
 
 ## Installation
 
-### Prerequisites
-
-1. **Python 3.8 or higher**
-2. **FFmpeg** (required for audio extraction)
-   ```bash
-   # Windows (using Chocolatey)
-   choco install ffmpeg
-
-   # Windows (using Scoop)
-   scoop install ffmpeg
-
-   # Or download from https://ffmpeg.org/download.html
-   ```
-
-3. **CUDA** (optional, for GPU acceleration)
-
-### Install Dependencies
+### 1. Clone the repo
 
 ```bash
-# Install all required packages
-pip install -r requirements.txt
-
-# If you encounter issues with PyTorch, install it separately first:
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121  # For CUDA 12.1
-# OR
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu  # For CPU only
+git clone https://github.com/YOUR_USERNAME/OptiScam_Qwen3.git
+cd OptiScam_Qwen3
 ```
 
-### Download Models
+### 2. Install PyTorch with CUDA
 
-The models will be automatically downloaded on first use:
-- **Qwen2-VL-2B-Instruct** (~4GB)
-- **TrOCR-base-printed** (~1GB)
-- **Whisper base** (~140MB)
+**Do this first, before installing anything else.**
+
+```bash
+# Check your CUDA version
+nvidia-smi
+
+# Install matching PyTorch build (replace cu121 with cu124 if your CUDA is 12.4+)
+pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Verify GPU is detected
+python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
+```
+
+### 3. Install FFmpeg (system binary)
+
+```bash
+# Windows — Chocolatey
+choco install ffmpeg
+
+# Windows — Scoop
+scoop install ffmpeg
+
+# Verify
+ffmpeg -version
+```
+
+### 4. Install Python dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 5. First run — model downloads
+
+On the first run the following models are downloaded automatically and cached in `~/.cache/huggingface/` and `~/.cache/whisper/`:
+
+| Model | Size | Purpose |
+|---|---|---|
+| `unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit` | ~2.4 GB | Visual analysis (4-bit quantized) |
+| `microsoft/trocr-small-printed` | ~60 MB | OCR fallback |
+| Whisper `tiny` | ~39 MB | Audio transcription |
+
+Models are only downloaded once. Subsequent runs load from cache instantly.
+
+---
 
 ## Usage
 
-### Basic Usage
+### Frame-by-frame analysis (default)
 
 ```bash
-python main.py path/to/video.mp4
+python main.py "path/to/video.mp4"
 ```
 
-### Advanced Options
+### Holistic analysis (recommended for scam detection)
+
+Passes the entire video plus metadata to Qwen3-VL in one context window.
 
 ```bash
-python main.py path/to/video.mp4 \
-    --output-dir results \
-    --frame-interval 30 \
-    --sharpness-threshold 100.0 \
-    --whisper-model base
+python main.py "path/to/video.mp4" --holistic --title "Video Title" --description "Description text"
 ```
 
-### Command-Line Arguments
+### All CLI options
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `video_path` | Path to video file (required) | - |
-| `--output-dir` | Output directory for results | Auto-generated |
-| `--frame-interval` | Extract every N frames | 30 |
-| `--sharpness-threshold` | Laplacian variance threshold | 100.0 |
-| `--no-sharpness-filter` | Disable sharpness filtering | False |
-| `--no-frame-analysis` | Skip Qwen3-VL analysis | False |
-| `--whisper-model` | Whisper model size (tiny/base/small/medium/large) | base |
+| Argument | Default | Description |
+|---|---|---|
+| `video_path` | *(required)* | Path to video file |
+| `--output-dir` | Auto-timestamped | Output directory |
+| `--holistic` | False | Use holistic analysis mode |
+| `--title` | None | Video title (holistic mode) |
+| `--description` | None | Video description (holistic mode) |
+| `--frame-interval` | 30 | Extract every N frames |
+| `--sharpness-threshold` | 100.0 | Laplacian variance cutoff |
+| `--no-sharpness-filter` | False | Disable sharpness filtering |
+| `--no-frame-analysis` | False | Skip Qwen3-VL frame analysis |
+| `--whisper-model` | `tiny` | `tiny` / `base` / `small` / `medium` / `large` |
+| `--device` | auto | `cuda` or `cpu` |
 
-### Example
-
-```bash
-# Analyze a video with custom settings
-python main.py scam_video.mp4 \
-    --output-dir analysis_results \
-    --frame-interval 15 \
-    --sharpness-threshold 150.0 \
-    --whisper-model small
-
-# Quick analysis (skip frame analysis, use tiny Whisper)
-python main.py video.mp4 \
-    --no-frame-analysis \
-    --whisper-model tiny \
-    --frame-interval 60
-```
-
-## Programmatic Usage
+### Programmatic usage
 
 ```python
 from main import OptiScamAnalyzer
 
-# Initialize with custom configuration
 config = {
     'sharpness_threshold': 100.0,
-    'whisper_model_size': 'base',
+    'whisper_model_size': 'tiny',
     'use_trocr_fallback': True,
-    'trocr_confidence_threshold': 0.5
+    'trocr_confidence_threshold': 0.5,
 }
 
 analyzer = OptiScamAnalyzer(config=config)
 
-# Process video
+# Frame-by-frame
 results = analyzer.process_video(
-    video_path='path/to/video.mp4',
+    video_path='video.mp4',
     frame_interval=30,
     use_sharpness_filter=True,
-    analyze_frames=True
+    analyze_frames=True,
 )
 
-# Access results
-print(f"Frames analyzed: {len(results['frames'])}")
-print(f"Text timeline: {results['text_timeline']}")
-print(f"Transcription: {results['audio_transcription']['full_text']}")
+# Holistic
+results = analyzer.analyze_video_holistic(
+    video_path='video.mp4',
+    title='Win a free iPhone!',
+    description='Click the link in bio...',
+)
 ```
 
-## Output Structure
+---
 
+## Output
+
+**Frame-by-frame mode:**
 ```
-output_videoname_20260212_143022/
-├── frames/                      # Extracted and processed frames
+output_<videoname>_<timestamp>/
+├── frames/
 │   ├── frame_0000.jpg
-│   ├── frame_0001.jpg
 │   └── ...
-├── analysis_report.json         # Complete analysis in JSON format
-├── summary.txt                  # Human-readable summary report
-└── transcription.txt            # Audio transcription with timestamps
+├── analysis_report.json
+├── summary.txt
+└── transcription.txt
 ```
 
-### Report Contents
+**Holistic mode:**
+```
+output_<videoname>_<timestamp>_holistic/
+├── frames/
+├── holistic_analysis_report.json
+└── scam_analysis_summary.txt
+```
 
-**analysis_report.json** includes:
-- Frame metadata (timestamps, sharpness scores, paths)
-- Text detections with timestamps and confidence scores
-- Audio transcription timeline
-- Visual analysis results with context
-- Complete configuration used
+---
 
-**summary.txt** includes:
-- Audio transcription
-- Text detection timeline
-- Frame-by-frame visual analysis
-- Context-aware insights
-
-## Configuration Options
-
-### Image Processing
+## Configuration reference
 
 ```python
 config = {
-    'clahe_clip_limit': 2.0,           # CLAHE clip limit
-    'clahe_tile_grid_size': (8, 8),    # CLAHE tile grid
-    'sharpness_threshold': 100.0        # Laplacian variance threshold
+    # Image processing
+    'clahe_clip_limit': 2.0,
+    'clahe_tile_grid_size': (8, 8),
+    'sharpness_threshold': 100.0,
+
+    # OCR
+    'use_trocr_fallback': True,
+    'trocr_confidence_threshold': 0.5,
+
+    # Audio
+    'whisper_model_size': 'tiny',       # tiny | base | small | medium | large
+    'whisper_language': None,           # None = auto-detect, or e.g. 'en'
+
+    # Vision model
+    'vision_model_name': 'unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit',
+
+    # Device
+    'device': None,                     # None = auto-detect GPU
 }
 ```
 
-### Text Extraction
+---
 
-```python
-config = {
-    'use_trocr_fallback': True,         # Enable TrOCR fallback
-    'trocr_confidence_threshold': 0.5   # Confidence threshold for TrOCR
-}
-```
+## GPU usage by component
 
-### Audio Transcription
+| Component | GPU? | Notes |
+|---|---|---|
+| Qwen3-VL | Yes | `device_map="auto"`, 4-bit BNB, CUDA required |
+| Whisper | Yes | auto-detects CUDA |
+| TrOCR | Yes | auto-detects CUDA |
+| RapidOCR | No | ONNX Runtime, CPU only |
+| OpenCV (CLAHE) | No | always CPU |
 
-```python
-config = {
-    'whisper_model_size': 'base',       # tiny, base, small, medium, large
-    'whisper_language': None            # Auto-detect or specify (e.g., 'en')
-}
-```
-
-### Vision Model
-
-```python
-config = {
-    'vision_model_name': 'Qwen/Qwen2-VL-2B-Instruct'
-}
-```
-
-## Module Documentation
-
-### [image_processing.py](image_processing.py)
-- `ImageProcessing`: CLAHE enhancement and frame extraction
-- `calculate_sharpness()`: Laplacian variance calculation
-- `sample_frames_by_sharpness()`: Smart frame sampling
-
-### [text_extraction.py](text_extraction.py)
-- `TextExtractor`: RapidOCR + TrOCR integration
-- `extract_text()`: Dual OCR system
-- `get_text_timeline()`: Timestamp-organized text
-
-### [audio_transcription.py](audio_transcription.py)
-- `AudioTranscriber`: Whisper integration
-- `transcribe_video()`: End-to-end audio transcription
-- `get_text_at_timestamp()`: Query audio at specific time
-
-### [Qwen3_VL_2B.py](Qwen3_VL_2B.py)
-- `Qwen3VLModel`: Vision-language model wrapper
-- `analyze_with_context()`: Context-aware analysis
-- `analyze_frames_for_scams()`: Scam detection pipeline
-
-### [model_for_pre_processing.py](model_for_pre_processing.py)
-- `PreProcessing`: Additional preprocessing utilities
-- Denoising, brightness/contrast adjustment, white balance
-- OCR optimization and skew correction
-
-## Performance Tips
-
-1. **GPU Acceleration**: Install PyTorch with CUDA for 10-20x speedup
-2. **Frame Interval**: Increase for faster processing (e.g., 60 for long videos)
-3. **Whisper Model**: Use 'tiny' or 'base' for faster transcription
-4. **Sharpness Threshold**: Increase to filter more aggressively (reduce frames)
-5. **Skip Frame Analysis**: Use `--no-frame-analysis` for quick OCR+audio only
-
-## System Requirements
-
-### Minimum
-- CPU: 4 cores
-- RAM: 8GB
-- Storage: 10GB free space
-- GPU: None (CPU-only mode supported)
-
-### Recommended
-- CPU: 8+ cores
-- RAM: 16GB+
-- Storage: 20GB+ free space
-- GPU: NVIDIA GPU with 8GB+ VRAM (RTX 3060 or better)
+---
 
 ## Troubleshooting
 
-### CUDA Out of Memory
-```python
-# Use smaller models or reduce batch size
-config = {
-    'whisper_model_size': 'tiny',  # Instead of 'base'
-}
+### `torch.cuda.is_available()` returns `False`
+PyTorch is installed as a CPU-only build. Reinstall with the CUDA index:
+```bash
+pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 
-### FFmpeg Not Found
+### `ImportError: No module named 'qwen_vl_utils'`
 ```bash
-# Verify FFmpeg installation
+pip install qwen-vl-utils
+```
+
+### `ModuleNotFoundError: No module named 'sentencepiece'`
+```bash
+pip install sentencepiece
+```
+
+### `ValueError: Using a device_map requires accelerate`
+```bash
+pip install accelerate
+```
+
+### `TypeError: LoadLibrary() argument 1 must be str, not None`
+A Graphite Whisper stub (`whisper.py`) is shadowing the real OpenAI Whisper package:
+```bash
+pip uninstall whisper -y
+pip install openai-whisper
+```
+
+### FFmpeg not found
+```bash
+# Verify it is on PATH
 ffmpeg -version
 
-# Add to PATH if needed (Windows)
+# Windows — add to PATH permanently
 setx PATH "%PATH%;C:\path\to\ffmpeg\bin"
 ```
 
-### Model Download Issues
-```python
-# Set HuggingFace cache directory
-import os
-os.environ['TRANSFORMERS_CACHE'] = 'D:/models/cache'
+### CUDA out of memory
+Use smaller models:
+```bash
+python main.py video.mp4 --whisper-model tiny --no-frame-analysis
 ```
 
-## Why Whisper Instead of YouTube API?
+---
 
-1. **Universal**: Works with any video source (YouTube, TikTok, local files)
-2. **Offline**: No API keys or internet required after model download
-3. **Privacy**: All processing done locally
-4. **Accuracy**: State-of-the-art transcription quality
-5. **Free**: No usage limits or costs
-6. **Multi-language**: 99+ languages supported out of the box
+## System requirements
 
-YouTube API only works for YouTube videos and requires authentication.
+| | Minimum | Recommended |
+|---|---|---|
+| CPU | 4 cores | 8+ cores |
+| RAM | 8 GB | 16 GB+ |
+| VRAM | 4 GB | 8 GB+ |
+| Storage | 10 GB | 20 GB+ |
+| GPU | — | NVIDIA RTX 3060 or better |
+
+---
+
+## Modules
+
+| File | Class | Purpose |
+|---|---|---|
+| [main.py](main.py) | `OptiScamAnalyzer` | Pipeline orchestration, CLI |
+| [image_processing.py](image_processing.py) | `ImageProcessing` | CLAHE, sharpness filtering, frame extraction |
+| [text_extraction.py](text_extraction.py) | `TextExtractor` | RapidOCR + TrOCR dual OCR |
+| [audio_transcription.py](audio_transcription.py) | `AudioTranscriber` | Whisper transcription |
+| [Qwen3_VL_2B.py](Qwen3_VL_2B.py) | `Qwen3VLModel` | Vision-language inference |
+| [model_for_pre_processing.py](model_for_pre_processing.py) | `PreProcessing` | Additional image preprocessing utilities |
+
+---
 
 ## License
 
-This project uses multiple open-source components. Please check individual licenses:
-- Qwen2-VL: Apache 2.0
-- Whisper: MIT
-- TrOCR: MIT
-- RapidOCR: Apache 2.0
+Open-source components used:
 
-## Citation
-
-If you use this system in research, please cite the underlying models:
-- [Qwen2-VL](https://github.com/QwenLM/Qwen2-VL)
-- [Whisper](https://github.com/openai/whisper)
-- [TrOCR](https://github.com/microsoft/unilm/tree/master/trocr)
+| Component | License |
+|---|---|
+| Qwen3-VL (Unsloth 4-bit) | Apache 2.0 |
+| OpenAI Whisper | MIT |
+| Microsoft TrOCR | MIT |
+| RapidOCR | Apache 2.0 |
+| OpenCV | Apache 2.0 |

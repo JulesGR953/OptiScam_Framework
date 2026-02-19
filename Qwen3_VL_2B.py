@@ -1,10 +1,16 @@
 import torch
-from transformers import Qwen2VLForConditionalGeneration, AutoProcessor
+try:
+    from transformers import AutoImageTextToText as _VLModel
+except ImportError:
+    try:
+        from transformers import AutoModelForVision2Seq as _VLModel
+    except ImportError:
+        from transformers import AutoModel as _VLModel
+from transformers import AutoProcessor
 from qwen_vl_utils import process_vision_info
-from PIL import Image
 
 class Qwen3VLModel:
-    def __init__(self, model_name="Qwen/Qwen2-VL-2B-Instruct", device=None):
+    def __init__(self, model_name="unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit", device=None):
         """
         Initialize Qwen3-VL-2B-Instruct model for visual understanding.
 
@@ -14,20 +20,18 @@ class Qwen3VLModel:
         self.model_name = model_name
         self.device = device if device else ("cuda" if torch.cuda.is_available() else "cpu")
 
-        print(f"Loading {model_name} on {self.device}...")
+        print(f"Loading {model_name} (4-bit) on {self.device}...")
 
-        # Load model
-        self.model = Qwen2VLForConditionalGeneration.from_pretrained(
+        # Load 4-bit quantized model — device_map="auto" handles GPU placement
+        self.model = _VLModel.from_pretrained(
             model_name,
-            torch_dtype=torch.float16 if self.device == "cuda" else torch.float32,
-            device_map="auto" if self.device == "cuda" else None
+            load_in_4bit=True,
+            dtype=torch.float16,
+            device_map="auto"
         )
 
         # Load processor
         self.processor = AutoProcessor.from_pretrained(model_name)
-
-        if self.device == "cpu":
-            self.model = self.model.to(self.device)
 
         print(f"Model loaded successfully on {self.device}")
 
