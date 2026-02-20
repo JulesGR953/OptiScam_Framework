@@ -11,7 +11,7 @@ and Qwen3-VL-2B vision-language model inference with 4-bit quantization.
 | Tool / Library | Min Version | Purpose |
 |---|---|---|
 | Python | 3.10 | Runtime |
-| CUDA Toolkit | 12.1 | GPU acceleration |
+| CUDA Toolkit | 12.6 | GPU acceleration |
 | PyTorch | 2.0.0 | Deep learning backend |
 | torchvision | 0.15.0 | Vision transforms |
 | Transformers (HuggingFace) | 4.50.0 | Model loading & inference |
@@ -99,8 +99,13 @@ cd OptiScam_Qwen3
 # Check your CUDA version
 nvidia-smi
 
-# Install matching PyTorch build (replace cu121 with cu124 if your CUDA is 12.4+)
-pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# Install matching PyTorch build (use the index matching your CUDA version)
+# CUDA 12.6 (recommended):
+pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# CUDA 12.4:
+# pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu124
+# CUDA 12.1:
+# pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # Verify GPU is detected
 python -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"
@@ -270,7 +275,7 @@ config = {
 ### `torch.cuda.is_available()` returns `False`
 PyTorch is installed as a CPU-only build. Reinstall with the CUDA index:
 ```bash
-pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu121
+pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu126
 ```
 
 ### `ImportError: No module named 'qwen_vl_utils'`
