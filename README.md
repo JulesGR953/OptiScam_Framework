@@ -2,7 +2,7 @@
 
 A multi-modal video analysis pipeline for detecting scams in short-form videos.
 Combines CLAHE image enhancement, dual OCR (RapidOCR + TrOCR), Whisper audio transcription,
-and Qwen3-VL-2B vision-language model inference with 4-bit quantization.
+and Qwen3-VL-2B vision-language model inference with 4-bit NF4 quantization.
 
 ---
 
@@ -11,12 +11,12 @@ and Qwen3-VL-2B vision-language model inference with 4-bit quantization.
 | Tool / Library | Min Version | Purpose |
 |---|---|---|
 | Python | 3.10 | Runtime |
-| CUDA Toolkit | 12.6 | GPU acceleration |
+| CUDA Toolkit | 12.x | GPU acceleration |
 | PyTorch | 2.0.0 | Deep learning backend |
 | torchvision | 0.15.0 | Vision transforms |
 | Transformers (HuggingFace) | 4.50.0 | Model loading & inference |
 | Accelerate (HuggingFace) | 0.25.0 | `device_map="auto"` support |
-| BitsAndBytes | 0.43.0 | 4-bit model quantization |
+| BitsAndBytes | 0.43.0 | NF4 4-bit quantization |
 | SentencePiece | 0.1.99 | TrOCR tokenizer |
 | qwen-vl-utils | 0.0.8 | Qwen vision input processing |
 | OpenCV | 4.8.0 | Frame extraction & CLAHE |
@@ -44,7 +44,7 @@ Video Input
     ▼
 ┌─────────────────────────────────────────┐
 │  TextExtractor                          │
-│  · RapidOCR  (primary, fast)            │
+│  · RapidOCR  (primary, fast, CPU)       │
 │  · TrOCR     (fallback, low-confidence) │
 │  · Timestamp-indexed detection list     │
 └─────────────────────────────────────────┘
@@ -59,14 +59,17 @@ Video Input
     │
     ▼
 ┌─────────────────────────────────────────┐
-│  Qwen3VLModel                           │
-│  · 4-bit quantized (BNB)                │
-│  · Context-aware frame analysis         │
-│  · Holistic video analysis mode         │
+│  Qwen3VLModel.classify_video()          │
+│  · Up to 6 frames, evenly subsampled    │
+│  · Images capped at 448×448 px          │
+│  · Prompt: title + description +        │
+│    "Is this a scam? Yes/No + reasoning" │
+│  · One inference call per video         │
 └─────────────────────────────────────────┘
     │
     ▼
-JSON report + human-readable summary
+Verdict (Yes/No + 4-5 sentence reasoning)
++ JSON report + summary.txt
 ```
 
 See [CLASS_DIAGRAM.md](CLASS_DIAGRAM.md) for the full class diagram.
@@ -99,7 +102,7 @@ cd OptiScam_Qwen3
 # Check your CUDA version
 nvidia-smi
 
-# Install matching PyTorch build (use the index matching your CUDA version)
+# Install matching PyTorch build
 # CUDA 12.6 (recommended):
 pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cu126
 # CUDA 12.4:
@@ -134,11 +137,11 @@ pip install -r requirements.txt
 
 On the first run the following models are downloaded automatically and cached in `~/.cache/huggingface/` and `~/.cache/whisper/`:
 
-| Model | Size | Purpose |
-|---|---|---|
-| `Qwen/Qwen3-VL-2B-Instruct` | ~5 GB (quantized to ~2 GB in VRAM) | Visual analysis (NF4 quantized on first run) |
-| `microsoft/trocr-small-printed` | ~60 MB | OCR fallback |
-| Whisper `tiny` | ~39 MB | Audio transcription |
+| Model | Download Size | VRAM After Loading | Purpose |
+|---|---|---|---|
+| `Qwen/Qwen3-VL-2B-Instruct` | ~5 GB | ~2 GB | Visual scam classification (NF4 quantized on first run) |
+| `microsoft/trocr-small-printed` | ~60 MB | ~60 MB | OCR fallback |
+| Whisper `tiny` | ~39 MB | ~39 MB | Audio transcription |
 
 Models are only downloaded once. Subsequent runs load from cache instantly.
 
@@ -146,7 +149,7 @@ Models are only downloaded once. Subsequent runs load from cache instantly.
 
 ## Usage
 
-### Default analysis
+### Basic (no metadata)
 
 ```bash
 python main.py "path/to/video.mp4"
@@ -154,18 +157,23 @@ python main.py "path/to/video.mp4"
 
 ### With title and description (recommended)
 
-Title and description are passed directly into the model prompt, matching the training format.
+Title and description are injected directly into the model prompt, matching the training format.
 
 ```bash
-python main.py "path/to/video.mp4" --title "Video Title" --description "Description text"
+python main.py "path/to/video.mp4" \
+    --title "Best Free Crypto Mining Apps!" \
+    --description "Want to earn crypto without investment? Click the link..."
 ```
 
-### Holistic mode (lower frame rate)
+### Holistic mode
 
-Same classification method, samples frames less frequently (every 60 frames instead of 30).
+Same classification method, samples frames at a lower rate (every 60 frames vs 30).
+Useful for longer videos where dense frame extraction is unnecessary.
 
 ```bash
-python main.py "path/to/video.mp4" --holistic --title "Video Title" --description "Description text"
+python main.py "path/to/video.mp4" --holistic \
+    --title "Video Title" \
+    --description "Description text"
 ```
 
 ### All CLI options
@@ -174,12 +182,12 @@ python main.py "path/to/video.mp4" --holistic --title "Video Title" --descriptio
 |---|---|---|
 | `video_path` | *(required)* | Path to video file |
 | `--output-dir` | Auto-timestamped | Output directory |
-| `--title` | None | Video title (passed to model prompt) |
-| `--description` | None | Video description (passed to model prompt) |
-| `--holistic` | False | Lower frame rate variant |
+| `--title` | None | Video title (injected into model prompt) |
+| `--description` | None | Video description (injected into model prompt) |
+| `--holistic` | False | Lower frame rate variant (every 60 frames) |
 | `--frame-interval` | 30 | Extract every N frames |
-| `--sharpness-threshold` | 100.0 | Laplacian variance cutoff |
-| `--no-sharpness-filter` | False | Disable sharpness filtering |
+| `--sharpness-threshold` | 100.0 | Laplacian variance cutoff for frame selection |
+| `--no-sharpness-filter` | False | Disable sharpness filtering (keep all frames) |
 | `--whisper-model` | `tiny` | `tiny` / `base` / `small` / `medium` / `large` |
 | `--device` | auto | `cuda` or `cpu` |
 
@@ -189,27 +197,41 @@ python main.py "path/to/video.mp4" --holistic --title "Video Title" --descriptio
 from main import OptiScamAnalyzer
 
 config = {
+    # Image processing
     'sharpness_threshold': 100.0,
+
+    # OCR
+    'use_trocr_fallback': True,
+    'trocr_confidence_threshold': 0.5,
+
+    # Audio
     'whisper_model_size': 'tiny',
+
+    # Vision model
+    'vision_model_name': 'Qwen/Qwen3-VL-2B-Instruct',
+
+    # Device
+    'device': None,  # None = auto-detect GPU
 }
 
 analyzer = OptiScamAnalyzer(config=config)
 
 results = analyzer.process_video(
     video_path='video.mp4',
-    title='Win a free iPhone!',
-    description='Click the link in bio...',
+    title='Best Free Crypto Mining Apps!',
+    description='Want to earn crypto without investment? Click the link...',
 )
 
-print(results['verdict'])   # "Yes. ..." or "No. ..."
-print(results['is_scam'])   # True / False
+print(results['verdict'])   # "No. The content is considered legitimate because..."
+print(results['is_scam'])   # True or False
 ```
 
 ---
 
 ## Output
 
-**Frame-by-frame mode:**
+Both modes produce the same directory structure:
+
 ```
 output_<videoname>_<timestamp>/
 ├── frames/
@@ -220,12 +242,50 @@ output_<videoname>_<timestamp>/
 └── transcription.txt
 ```
 
-**Holistic mode:**
+Holistic mode appends `_holistic` to the directory name.
+
+### `analysis_report.json` structure
+
+```json
+{
+  "video_path": "...",
+  "title": "...",
+  "description": "...",
+  "output_dir": "...",
+  "timestamp": "...",
+  "frames": [...],
+  "text_detections": [...],
+  "text_timeline": {...},
+  "audio_transcription": {
+    "full_text": "...",
+    "timeline": [...],
+    "language": "en"
+  },
+  "verdict": "No. The content is considered legitimate because...",
+  "is_scam": false
+}
 ```
-output_<videoname>_<timestamp>_holistic/
-├── frames/
-├── holistic_analysis_report.json
-└── scam_analysis_summary.txt
+
+### `summary.txt` structure
+
+```
+============================================================
+OptiScam Video Analysis Report
+============================================================
+
+SCAM VERDICT
+------------------------------------------------------------
+RESULT: NO — This video does not appear to be a scam.
+
+No. The content is considered legitimate because...
+
+AUDIO TRANSCRIPTION
+------------------------------------------------------------
+...
+
+TEXT DETECTED IN FRAMES (Timeline)
+------------------------------------------------------------
+...
 ```
 
 ---
@@ -235,25 +295,35 @@ output_<videoname>_<timestamp>_holistic/
 ```python
 config = {
     # Image processing
-    'clahe_clip_limit': 2.0,
-    'clahe_tile_grid_size': (8, 8),
-    'sharpness_threshold': 100.0,
+    'clahe_clip_limit': 2.0,            # CLAHE contrast limit
+    'clahe_tile_grid_size': (8, 8),     # CLAHE tile size
+    'sharpness_threshold': 100.0,       # Laplacian variance cutoff (higher = stricter)
 
     # OCR
-    'use_trocr_fallback': True,
-    'trocr_confidence_threshold': 0.5,
+    'use_trocr_fallback': True,         # Use TrOCR for low-confidence RapidOCR results
+    'trocr_confidence_threshold': 0.5,  # RapidOCR confidence below this triggers TrOCR
 
     # Audio
     'whisper_model_size': 'tiny',       # tiny | base | small | medium | large
     'whisper_language': None,           # None = auto-detect, or e.g. 'en'
 
     # Vision model
-    'vision_model_name': 'Qwen/Qwen3-VL-2B-Instruct',
+    'vision_model_name': 'Qwen/Qwen3-VL-2B-Instruct',  # HuggingFace model ID
 
     # Device
-    'device': None,                     # None = auto-detect GPU
+    'device': None,                     # None = auto-detect GPU, or 'cuda' / 'cpu'
 }
 ```
+
+### `classify_video` parameters (advanced)
+
+These are set inside `Qwen3VLModel.classify_video()` and can be changed if needed:
+
+| Parameter | Default | Description |
+|---|---|---|
+| `max_frames` | 6 | Max frames passed to model per call (increase only with >8 GB VRAM) |
+| `max_pixels` | 448 × 448 | Per-image resolution cap (lower = less VRAM, faster inference) |
+| `max_new_tokens` | 512 | Max tokens in the model's response |
 
 ---
 
@@ -308,10 +378,23 @@ ffmpeg -version
 setx PATH "%PATH%;C:\path\to\ffmpeg\bin"
 ```
 
-### CUDA out of memory
-Use smaller models:
-```bash
-python main.py video.mp4 --whisper-model tiny --no-frame-analysis
+### CUDA out of memory during inference
+The model uses ~2 GB VRAM at rest. Each additional frame adds visual tokens.
+Reduce frame count or resolution:
+
+```python
+# In Qwen3_VL_2B.py, classify_video() call — reduce max_frames or max_pixels:
+verdict = self.vision_model.classify_video(
+    image_paths=frame_paths,
+    title=title,
+    description=description,
+    max_frames=4,           # default 6 — lower to reduce VRAM
+)
+```
+
+Or reduce the per-image resolution cap inside `classify_video`:
+```python
+"max_pixels": 336 * 336,  # default 448*448
 ```
 
 ---
@@ -322,7 +405,7 @@ python main.py video.mp4 --whisper-model tiny --no-frame-analysis
 |---|---|---|
 | CPU | 4 cores | 8+ cores |
 | RAM | 8 GB | 16 GB+ |
-| VRAM | 4 GB | 8 GB+ |
+| VRAM | 6 GB | 8 GB+ |
 | Storage | 10 GB | 20 GB+ |
 | GPU | — | NVIDIA RTX 3060 or better |
 
@@ -336,7 +419,7 @@ python main.py video.mp4 --whisper-model tiny --no-frame-analysis
 | [image_processing.py](image_processing.py) | `ImageProcessing` | CLAHE, sharpness filtering, frame extraction |
 | [text_extraction.py](text_extraction.py) | `TextExtractor` | RapidOCR + TrOCR dual OCR |
 | [audio_transcription.py](audio_transcription.py) | `AudioTranscriber` | Whisper transcription |
-| [Qwen3_VL_2B.py](Qwen3_VL_2B.py) | `Qwen3VLModel` | Vision-language inference |
+| [Qwen3_VL_2B.py](Qwen3_VL_2B.py) | `Qwen3VLModel` | Vision-language scam classification |
 | [model_for_pre_processing.py](model_for_pre_processing.py) | `PreProcessing` | Additional image preprocessing utilities |
 
 ---
@@ -347,7 +430,7 @@ Open-source components used:
 
 | Component | License |
 |---|---|
-| Qwen3-VL (Unsloth 4-bit) | Apache 2.0 |
+| Qwen3-VL (Official, HuggingFace) | Apache 2.0 |
 | OpenAI Whisper | MIT |
 | Microsoft TrOCR | MIT |
 | RapidOCR | Apache 2.0 |

@@ -90,7 +90,7 @@ classDiagram
     OptiScamAnalyzer "1" *-- "1" Qwen3VLModel : owns
     OptiScamAnalyzer ..> PreProcessing : optional use
 
-    note for OptiScamAnalyzer "Entry point via main()\nTwo modes: process_video() and analyze_video_holistic()"
+    note for OptiScamAnalyzer "Entry point via main()\nprocess_video(): default (every 30 frames)\nanalyze_video_holistic(): lower rate (every 60 frames)"
     note for Qwen3VLModel "Loaded with NF4 quantization via BitsAndBytesConfig\nDefault model: Qwen/Qwen3-VL-2B-Instruct"
     note for TextExtractor "RapidOCR primary (CPU/ONNX)\nTrOCR fallback on low confidence (GPU)"
 ```
@@ -98,26 +98,23 @@ classDiagram
 ## Data flow
 
 ```
-video_path
+video_path + title + description
     │
     ├──▶ ImageProcessing.sample_frames_by_sharpness()
-    │         └── List[frame_metadata]  ──────────────────────────┐
-    │                                                              │
-    ├──▶ TextExtractor.extract_text_from_frames(frame_metadata)   │
-    │         └── List[text_detections]                           │
-    │              └── .get_text_timeline()  ──────────────────┐  │
-    │                                                           │  │
-    ├──▶ AudioTranscriber.transcribe_video()                    │  │
-    │         └── transcription dict  ─────────────────────┐   │  │
-    │                                                       │   │  │
-    └──▶ Qwen3VLModel.analyze_with_context(                 │   │  │
-                  image_path  ◀──────────────────────────────│──│──┘
-                  context {                                  │  │
-                    transcription  ◀─────────────────────────┘  │
-                    ocr_text  ◀─────────────────────────────────┘
-                  }
-              )
-              └── analysis string
+    │         └── List[frame_metadata]  ─────────────────────┐
+    │                                                         │ frame paths
+    ├──▶ TextExtractor.extract_text_from_frames()            │
+    │         └── text_timeline  (saved to report only)      │
+    │                                                         │
+    ├──▶ AudioTranscriber.transcribe_video()                 │
+    │         └── transcription  (saved to report only)      │
+    │                                                         ▼
+    └──▶ Qwen3VLModel.classify_video(
+              image_paths  ◀───────────────── up to 6 frames,
+              title,                          evenly subsampled,
+              description                     448×448 px cap
+          )
+          └── "Yes/No. <4-5 sentence reasoning>"
 
-All results ──▶ JSON report + summary.txt
+verdict + all intermediate data ──▶ analysis_report.json + summary.txt
 ```
