@@ -6,6 +6,28 @@ and Qwen3-VL-2B vision-language model inference with 4-bit quantization.
 
 ---
 
+## Software Requirements
+
+| Tool / Library | Min Version | Purpose |
+|---|---|---|
+| Python | 3.10 | Runtime |
+| CUDA Toolkit | 12.1 | GPU acceleration |
+| PyTorch | 2.0.0 | Deep learning backend |
+| torchvision | 0.15.0 | Vision transforms |
+| Transformers (HuggingFace) | 4.50.0 | Model loading & inference |
+| Accelerate (HuggingFace) | 0.25.0 | `device_map="auto"` support |
+| BitsAndBytes | 0.43.0 | 4-bit model quantization |
+| SentencePiece | 0.1.99 | TrOCR tokenizer |
+| qwen-vl-utils | 0.0.8 | Qwen vision input processing |
+| OpenCV | 4.8.0 | Frame extraction & CLAHE |
+| Pillow | 10.0.0 | Image I/O |
+| NumPy | 1.24.0 | Array operations |
+| RapidOCR (ONNX) | 1.3.0 | Primary OCR engine |
+| OpenAI Whisper | 20231117 | Audio transcription |
+| FFmpeg | 6.0 *(system binary)* | Audio extraction from video |
+
+---
+
 ## Architecture
 
 ```
