@@ -11,10 +11,9 @@ classDiagram
         +audio_transcriber : AudioTranscriber
         +vision_model : Qwen3VLModel
         +__init__(config)
-        +process_video(video_path, output_dir, frame_interval, use_sharpness_filter, analyze_frames) dict
+        +process_video(video_path, title, description, output_dir, frame_interval, use_sharpness_filter) dict
         +analyze_video_holistic(video_path, title, description, output_dir) dict
         -_generate_summary(results, output_path)
-        -_generate_holistic_summary(results, output_path)
     }
 
     class ImageProcessing {
@@ -65,6 +64,7 @@ classDiagram
         +model : AutoImageTextToText
         +processor : AutoProcessor
         +__init__(model_name, device)
+        +classify_video(image_paths, title, description, max_frames, max_new_tokens) str
         +analyze_image(image_path, prompt, max_new_tokens) str
         +analyze_frames_for_scams(frame_metadata, custom_prompt) list
         +analyze_video_holistic(video_path, title, description, transcription, ocr_text, max_new_tokens) str
@@ -91,7 +91,7 @@ classDiagram
     OptiScamAnalyzer ..> PreProcessing : optional use
 
     note for OptiScamAnalyzer "Entry point via main()\nTwo modes: process_video() and analyze_video_holistic()"
-    note for Qwen3VLModel "Loaded with 4-bit BNB quantization\nvia unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit"
+    note for Qwen3VLModel "Loaded with NF4 quantization via BitsAndBytesConfig\nDefault model: Qwen/Qwen3-VL-2B-Instruct"
     note for TextExtractor "RapidOCR primary (CPU/ONNX)\nTrOCR fallback on low confidence (GPU)"
 ```
 

@@ -1,16 +1,18 @@
 import torch
-try:
-    from transformers import AutoImageTextToText as _VLModel
-except ImportError:
-    try:
-        from transformers import AutoModelForVision2Seq as _VLModel
-    except ImportError:
-        from transformers import AutoModel as _VLModel
-from transformers import AutoProcessor
+from transformers import AutoProcessor, BitsAndBytesConfig
 from qwen_vl_utils import process_vision_info
 
+try:
+    from transformers import Qwen3VLForConditionalGeneration as _VLModel
+except ImportError:
+    try:
+        from transformers import Qwen2VLForConditionalGeneration as _VLModel
+    except ImportError:
+        from transformers import AutoModelForVision2Seq as _VLModel
+
+
 class Qwen3VLModel:
-    def __init__(self, model_name="unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit", device=None):
+    def __init__(self, model_name="Qwen/Qwen3-VL-2B-Instruct", device=None):
         """
         Initialize Qwen3-VL-2B-Instruct model for visual understanding.
 
@@ -20,17 +22,21 @@ class Qwen3VLModel:
         self.model_name = model_name
         self.device = device if device else ("cuda" if torch.cuda.is_available() else "cpu")
 
-        print(f"Loading {model_name} (4-bit) on {self.device}...")
+        print(f"Loading {model_name} on {self.device}...")
 
-        # Load 4-bit quantized model — device_map="auto" handles GPU placement
-        self.model = _VLModel.from_pretrained(
-            model_name,
+        bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            dtype=torch.float16,
-            device_map="auto"
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=False,
+            bnb_4bit_quant_type="nf4",
         )
 
-        # Load processor
+        self.model = _VLModel.from_pretrained(
+            model_name,
+            quantization_config=bnb_config,
+            device_map="auto",
+        )
+
         self.processor = AutoProcessor.from_pretrained(model_name)
 
         print(f"Model loaded successfully on {self.device}")
@@ -44,21 +50,11 @@ class Qwen3VLModel:
         :param max_new_tokens: Maximum tokens to generate
         :return: Model's response
         """
-        # Prepare messages in the format Qwen expects
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "image": image_path,
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
+        messages = [{"role": "user", "content": [
+            {"type": "image", "image": image_path},
+            {"type": "text", "text": prompt},
+        ]}]
 
-        # Prepare for inference
         text = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -69,19 +65,15 @@ class Qwen3VLModel:
             videos=video_inputs,
             padding=True,
             return_tensors="pt",
-        )
-        inputs = inputs.to(self.device)
+        ).to(self.device)
 
-        # Generate response
         generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
         generated_ids_trimmed = [
             out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
         ]
-        output_text = self.processor.batch_decode(
+        return self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
-
-        return output_text[0]
+        )[0]
 
     def analyze_frames_for_scams(self, frame_metadata, custom_prompt=None):
         """
@@ -111,7 +103,6 @@ Provide a brief analysis of any suspicious elements found."""
 
             try:
                 analysis = self.analyze_image(image_path, prompt)
-
                 results.append({
                     'frame_id': frame_id,
                     'timestamp': timestamp,
@@ -119,7 +110,6 @@ Provide a brief analysis of any suspicious elements found."""
                     'analysis': analysis,
                     'model': self.model_name
                 })
-
                 print(f"[Frame {frame_id} @ {timestamp:.2f}s] Analysis complete")
 
             except Exception as e:
@@ -146,24 +136,18 @@ Provide a brief analysis of any suspicious elements found."""
         :param max_new_tokens: Maximum tokens to generate
         :return: Comprehensive scam analysis
         """
-        # Build comprehensive context
         context_parts = []
-
         if title:
             context_parts.append(f"**Video Title:** {title}")
-
         if description:
             context_parts.append(f"**Video Description:** {description}")
-
         if transcription:
             context_parts.append(f"**Audio Transcription:** {transcription}")
-
         if ocr_text:
             context_parts.append(f"**Text Visible in Video:** {ocr_text}")
 
         context_str = "\n\n".join(context_parts)
 
-        # Create comprehensive scam detection prompt
         prompt = f"""You are analyzing this video for potential scam indicators.
 
 Here is the available context:
@@ -199,22 +183,11 @@ Analyze the entire video content along with the provided context (title, descrip
 
 Be thorough and specific in your analysis."""
 
-        # Prepare messages with video input
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "video",
-                        "video": video_path,
-                        "fps": 1.0,  # Sample 1 frame per second for comprehensive understanding
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ]
+        messages = [{"role": "user", "content": [
+            {"type": "video", "video": video_path, "fps": 1.0},
+            {"type": "text", "text": prompt},
+        ]}]
 
-        # Prepare for inference
         text = self.processor.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
@@ -225,19 +198,15 @@ Be thorough and specific in your analysis."""
             videos=video_inputs,
             padding=True,
             return_tensors="pt",
-        )
-        inputs = inputs.to(self.device)
+        ).to(self.device)
 
-        # Generate response
         generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
         generated_ids_trimmed = [
             out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
         ]
-        output_text = self.processor.batch_decode(
+        return self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
-        )
-
-        return output_text[0]
+        )[0]
 
     def analyze_with_context(self, image_path, context_info, prompt_template=None):
         """
@@ -254,7 +223,6 @@ Be thorough and specific in your analysis."""
 
 Analyze this image for scam indicators and explain how the visual content relates to the context provided."""
 
-        # Build context string
         context_parts = []
         if 'transcription' in context_info:
             context_parts.append(f"Audio: {context_info['transcription']}")
@@ -268,6 +236,70 @@ Analyze this image for scam indicators and explain how the visual content relate
 
         return self.analyze_image(image_path, prompt)
 
+    def classify_video(self, image_paths, title=None, description=None,
+                       max_frames=6, max_new_tokens=512):
+        """
+        Classify a video as scam or legitimate using multiple frames.
+        Matches the training format: all frames + title/description → Yes/No + reasoning.
+
+        :param image_paths: List of frame image paths
+        :param title: Video title
+        :param description: Video description
+        :param max_frames: Maximum number of frames to pass (prevents OOM)
+        :param max_new_tokens: Maximum tokens to generate
+        :return: "Yes. <reasoning>" or "No. <reasoning>"
+        """
+        # Subsample evenly across the full frame list so we get representative coverage
+        if len(image_paths) > max_frames:
+            step = len(image_paths) / max_frames
+            frames = [image_paths[int(i * step)] for i in range(max_frames)]
+        else:
+            frames = image_paths
+
+        content = []
+        for img_path in frames:
+            # Cap resolution to limit visual tokens per image and prevent OOM
+            content.append({
+                "type": "image",
+                "image": img_path,
+                "min_pixels": 224 * 224,
+                "max_pixels": 448 * 448,
+            })
+
+        prompt_parts = []
+        if title:
+            prompt_parts.append(f"Title: {title}")
+        if description:
+            prompt_parts.append(f"Description: {description}")
+        prompt_parts.append("")
+        prompt_parts.append(
+            "Is this video likely a Scam and Check if the Video is a Scam and the Title and "
+            "Description are Deceptive? Answer Yes/No followed by your reasoning. 4-5 Sentences"
+        )
+        content.append({"type": "text", "text": "\n".join(prompt_parts)})
+
+        messages = [{"role": "user", "content": content}]
+
+        text = self.processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = self.processor(
+            text=[text],
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True,
+            return_tensors="pt",
+        ).to(self.device)
+
+        generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+        generated_ids_trimmed = [
+            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+        ]
+        return self.processor.batch_decode(
+            generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
+        )[0]
+
     def batch_analyze(self, image_paths, prompt, batch_size=4):
         """
         Analyze multiple images in batches.
@@ -278,15 +310,12 @@ Analyze this image for scam indicators and explain how the visual content relate
         :return: List of analysis results
         """
         results = []
-
         for i in range(0, len(image_paths), batch_size):
             batch = image_paths[i:i + batch_size]
-
             for img_path in batch:
                 try:
                     result = self.analyze_image(img_path, prompt)
                     results.append({'image_path': img_path, 'analysis': result})
                 except Exception as e:
                     results.append({'image_path': img_path, 'analysis': f"Error: {str(e)}"})
-
         return results

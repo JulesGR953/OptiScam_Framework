@@ -136,7 +136,7 @@ On the first run the following models are downloaded automatically and cached in
 
 | Model | Size | Purpose |
 |---|---|---|
-| `unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit` | ~2.4 GB | Visual analysis (4-bit quantized) |
+| `Qwen/Qwen3-VL-2B-Instruct` | ~5 GB (quantized to ~2 GB in VRAM) | Visual analysis (NF4 quantized on first run) |
 | `microsoft/trocr-small-printed` | ~60 MB | OCR fallback |
 | Whisper `tiny` | ~39 MB | Audio transcription |
 
@@ -146,15 +146,23 @@ Models are only downloaded once. Subsequent runs load from cache instantly.
 
 ## Usage
 
-### Frame-by-frame analysis (default)
+### Default analysis
 
 ```bash
 python main.py "path/to/video.mp4"
 ```
 
-### Holistic analysis (recommended for scam detection)
+### With title and description (recommended)
 
-Passes the entire video plus metadata to Qwen3-VL in one context window.
+Title and description are passed directly into the model prompt, matching the training format.
+
+```bash
+python main.py "path/to/video.mp4" --title "Video Title" --description "Description text"
+```
+
+### Holistic mode (lower frame rate)
+
+Same classification method, samples frames less frequently (every 60 frames instead of 30).
 
 ```bash
 python main.py "path/to/video.mp4" --holistic --title "Video Title" --description "Description text"
@@ -166,13 +174,12 @@ python main.py "path/to/video.mp4" --holistic --title "Video Title" --descriptio
 |---|---|---|
 | `video_path` | *(required)* | Path to video file |
 | `--output-dir` | Auto-timestamped | Output directory |
-| `--holistic` | False | Use holistic analysis mode |
-| `--title` | None | Video title (holistic mode) |
-| `--description` | None | Video description (holistic mode) |
+| `--title` | None | Video title (passed to model prompt) |
+| `--description` | None | Video description (passed to model prompt) |
+| `--holistic` | False | Lower frame rate variant |
 | `--frame-interval` | 30 | Extract every N frames |
 | `--sharpness-threshold` | 100.0 | Laplacian variance cutoff |
 | `--no-sharpness-filter` | False | Disable sharpness filtering |
-| `--no-frame-analysis` | False | Skip Qwen3-VL frame analysis |
 | `--whisper-model` | `tiny` | `tiny` / `base` / `small` / `medium` / `large` |
 | `--device` | auto | `cuda` or `cpu` |
 
@@ -184,26 +191,18 @@ from main import OptiScamAnalyzer
 config = {
     'sharpness_threshold': 100.0,
     'whisper_model_size': 'tiny',
-    'use_trocr_fallback': True,
-    'trocr_confidence_threshold': 0.5,
 }
 
 analyzer = OptiScamAnalyzer(config=config)
 
-# Frame-by-frame
 results = analyzer.process_video(
-    video_path='video.mp4',
-    frame_interval=30,
-    use_sharpness_filter=True,
-    analyze_frames=True,
-)
-
-# Holistic
-results = analyzer.analyze_video_holistic(
     video_path='video.mp4',
     title='Win a free iPhone!',
     description='Click the link in bio...',
 )
+
+print(results['verdict'])   # "Yes. ..." or "No. ..."
+print(results['is_scam'])   # True / False
 ```
 
 ---
@@ -249,7 +248,7 @@ config = {
     'whisper_language': None,           # None = auto-detect, or e.g. 'en'
 
     # Vision model
-    'vision_model_name': 'unsloth/Qwen3-VL-2B-Instruct-unsloth-bnb-4bit',
+    'vision_model_name': 'Qwen/Qwen3-VL-2B-Instruct',
 
     # Device
     'device': None,                     # None = auto-detect GPU
@@ -262,7 +261,7 @@ config = {
 
 | Component | GPU? | Notes |
 |---|---|---|
-| Qwen3-VL | Yes | `device_map="auto"`, 4-bit BNB, CUDA required |
+| Qwen3-VL | Yes | `device_map="auto"`, NF4 via `BitsAndBytesConfig`, CUDA required |
 | Whisper | Yes | auto-detects CUDA |
 | TrOCR | Yes | auto-detects CUDA |
 | RapidOCR | No | ONNX Runtime, CPU only |
