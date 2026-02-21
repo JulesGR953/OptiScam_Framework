@@ -5,12 +5,12 @@ from PIL import Image
 import torch
 
 class TextExtractor:
-    def __init__(self, use_trocr_fallback=True, trocr_confidence_threshold=0.5):
+    def __init__(self, use_trocr_fallback=True, trocr_confidence_threshold=0.8):
         """
         Initialize text extraction with RapidOCR and optional TrOCR fallback.
 
         :param use_trocr_fallback: Use TrOCR for low-confidence detections
-        :param trocr_confidence_threshold: Confidence threshold below which TrOCR is used
+        :param trocr_confidence_threshold: RapidOCR confidence below which TrOCR takes over (default 0.8 = 80%)
         """
         self.use_trocr_fallback = use_trocr_fallback
         self.trocr_confidence_threshold = trocr_confidence_threshold

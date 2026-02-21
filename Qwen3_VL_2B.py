@@ -155,6 +155,11 @@ Here is the available context:
 {context_str}
 
 **Your Task:**
+BE PRAGMATIC DO NOT BE FOOLED BY SEMANTIC MISDIRECTION. Analyze the video content along with the provided context to detect if this is a scam. Consider:
+1. Mismatches & Deception: Do the title, description, visual content, and audio align? Are there contradictions suggesting deception?
+2. Red Flags: Look for fake urgency, requests for personal info, too-good-to-be-true offers, impersonation, suspicious URLs, poor grammar, etc.
+3. Manipulation Tactics: Does the video use fear, urgency, or greed to pressure viewers?
+4. Visual Analysis: Look for fake websites, manipulated images, generic stock footage, low-quality branding, etc.
 Analyze the entire video content along with the provided context (title, description, audio, and visual text) to detect if this is a scam. Consider:
 
 1. **Mismatches & Deception:** Do the title, description, visual content, and audio align? Are there contradictions suggesting deception?

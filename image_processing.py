@@ -36,11 +36,17 @@ class ImageProcessing:
         """
         Samples frames from a video using sharpness-based filtering and applies CLAHE.
 
+        Pipeline order:
+          1. Sample frame from video
+          2. Apply CLAHE → save full-resolution CLAHE frame
+          3. OCR reads the full-res CLAHE frame (happens in TextExtractor)
+          4. Vision model loads the same path but compresses internally via min_pixels/max_pixels
+
         :param video_path: Path to the video file.
         :param interval: Extract every 'n' frames for evaluation.
-        :param output_dir: Folder to save the processed frames.
+        :param output_dir: Folder to save the CLAHE-processed frames.
         :param use_sharpness_filter: If True, only save frames above sharpness threshold.
-        :return: List of dictionaries with frame info (path, timestamp, sharpness)
+        :return: List of dicts with frame info (path, timestamp, sharpness)
         """
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
@@ -66,6 +72,7 @@ class ImageProcessing:
                     frame_count += 1
                     continue
 
+                # Apply CLAHE at full resolution — OCR runs on this
                 processed_frame = self.apply_clahe(frame)
 
                 filename = f"frame_{saved_count:04d}.jpg"
@@ -75,7 +82,7 @@ class ImageProcessing:
                 frame_metadata.append({
                     'frame_id': saved_count,
                     'original_frame_number': frame_count,
-                    'path': save_path,
+                    'path': save_path,   # full-res CLAHE frame (OCR + vision model both read this)
                     'timestamp': timestamp,
                     'sharpness': sharpness
                 })

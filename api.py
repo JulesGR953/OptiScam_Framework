@@ -167,16 +167,106 @@ async def analyze(
     return {"job_id": job_id}
 
 
+@app.post("/analyze-youtube")
+async def analyze_youtube(
+    url: str = Form(...),
+    holistic: str = Form("false"),
+):
+    """
+    Download a YouTube video via yt-dlp, extract its title + description,
+    then run the same analysis pipeline as /analyze.
+
+    Returns immediately with a job_id. Poll GET /job/{job_id} for progress.
+    Status flow: pending → downloading → running → done / error
+    """
+    job_id = str(uuid.uuid4())
+    jobs[job_id] = {"status": "pending", "url": url}
+
+    thread = threading.Thread(
+        target=_run_youtube_analysis,
+        args=(job_id, url, holistic.lower() == "true"),
+        daemon=True,
+    )
+    thread.start()
+
+    return {"job_id": job_id}
+
+
+def _run_youtube_analysis(job_id: str, url: str, holistic: bool):
+    """Download the YouTube video with yt-dlp, then hand off to _run_analysis."""
+    try:
+        import yt_dlp
+    except ImportError:
+        jobs[job_id] = {
+            "status": "error",
+            "error": "yt-dlp is not installed. Run: pip install yt-dlp",
+        }
+        return
+
+    video_path = os.path.join(UPLOAD_DIR, f"{job_id}.mp4")
+
+    ydl_opts = {
+        # Prefer MP4 ≤720p; fall back to best available
+        "format": "bestvideo[ext=mp4][height<=720]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "outtmpl": video_path,
+        "merge_output_format": "mp4",
+        "quiet": True,
+        "no_warnings": True,
+        # Write actual output filename into yt-dlp's internal path (handles
+        # cases where yt-dlp adds a suffix like .f137.mp4)
+        "noplaylist": True,
+    }
+
+    try:
+        jobs[job_id]["status"] = "downloading"
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+
+        title         = info.get("title")       or None
+        description   = info.get("description") or None
+        thumbnail_url = info.get("thumbnail")   or None
+
+        # Expose thumbnail so the frontend can show it during analysis
+        if thumbnail_url:
+            jobs[job_id]["thumbnail_url"] = thumbnail_url
+
+        # yt-dlp may have named the file differently; find the actual path
+        actual_path = video_path
+        if not os.path.exists(actual_path):
+            # Try common suffixes yt-dlp appends when merging streams
+            for candidate in Path(UPLOAD_DIR).glob(f"{job_id}.*"):
+                actual_path = str(candidate)
+                break
+
+        _run_analysis(job_id, actual_path, title, description, holistic)
+
+    except Exception as e:
+        import traceback
+        jobs[job_id] = {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }
+        # Clean up any partial download
+        for f in Path(UPLOAD_DIR).glob(f"{job_id}*"):
+            try:
+                f.unlink()
+            except Exception:
+                pass
+
+
 @app.get("/job/{job_id}")
 def get_job(job_id: str):
     """
     Poll for job status and results.
 
     Returns:
-        {"status": "pending"}   — queued, not started yet
-        {"status": "running"}   — analysis in progress
+        {"status": "pending"}      — queued, not started yet
+        {"status": "downloading"}  — yt-dlp is fetching the YouTube video
+        {"status": "running"}      — AI analysis in progress
         {"status": "done", "result": {...}}   — complete
-        {"status": "error", "error": "..."}  — failed
+        {"status": "error", "error": "..."}   — failed
     """
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")

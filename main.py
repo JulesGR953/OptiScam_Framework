@@ -32,7 +32,7 @@ class OptiScamAnalyzer:
         # Text extraction with RapidOCR + TrOCR
         self.text_extractor = TextExtractor(
             use_trocr_fallback=self.config.get('use_trocr_fallback', True),
-            trocr_confidence_threshold=self.config.get('trocr_confidence_threshold', 0.5)
+            trocr_confidence_threshold=self.config.get('trocr_confidence_threshold', 0.8)
         )
 
         # Audio transcription with Whisper
