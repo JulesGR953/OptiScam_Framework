@@ -147,7 +147,28 @@ Models are only downloaded once. Subsequent runs load from cache instantly.
 
 ---
 
-## Usage
+## Running the Web Interface
+
+### Terminal 1 — Backend API server
+
+```bash
+python -m uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+Models load on startup (~30 s). You'll see `Models ready — API is accepting requests.` when it's ready.
+
+### Terminal 2 — Frontend
+
+```bash
+cd Front-End-OptiScam/my-newv
+npm run dev
+```
+
+Then open **http://localhost:3000** in your browser.
+
+---
+
+## CLI Usage
 
 ### Basic (no metadata)
 

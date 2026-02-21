@@ -40,6 +40,11 @@ rapidocr-onnxruntime>=1.3.0
 # Audio transcription
 openai-whisper>=20231117
 
+# Web API (backend server)
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+python-multipart>=0.0.9
+
 # Note: FFmpeg binary must be installed separately — NOT a Python package.
 #   Windows: choco install ffmpeg  OR  scoop install ffmpeg
 #   Or download from: https://ffmpeg.org/download.html
