@@ -252,7 +252,8 @@ Analyze this image for scam indicators and explain how the visual content relate
         :param description: Video description
         :param max_frames: Maximum number of frames to pass (prevents OOM)
         :param max_new_tokens: Maximum tokens to generate
-        :return: "Yes. <reasoning>" or "No. <reasoning>"
+        :return: Tuple of ("Yes. <reasoning>" or "No. <reasoning>", confidence_pct float or None)
+                 confidence_pct is the model's probability for the Yes/No verdict (0–100).
         """
         # Subsample evenly across the full frame list so we get representative coverage
         if len(image_paths) > max_frames:
@@ -278,8 +279,21 @@ Analyze this image for scam indicators and explain how the visual content relate
             prompt_parts.append(f"Description: {description}")
         prompt_parts.append("")
         prompt_parts.append(
-            "Is this video likely a Scam and Check if the Video is a Scam and the Title and "
-            "Description are Deceptive? Answer Yes/No followed by your reasoning. 4-5 Sentences"
+            "DEFINITION OF SCAM: A scam is strictly defined as a policy-violating deceptive "
+            "pattern in accordance with the official Community Guidelines of the target platforms. "
+            "Specifically: YouTube's 'Spam, Deceptive Practices & Scams Policies' and TikTok's "
+            "prohibitions on deceptive practices, financial frauds, and impersonation. "
+            "Observable scam behaviors include but are not limited to: promoting get-rich-quick "
+            "or guaranteed-return investment schemes, misleading or disguised external links, "
+            "visual or audio impersonation of legitimate brands/officials/platforms, fake "
+            "giveaways or prize claims, phishing for personal or financial information, "
+            "artificial urgency tactics (e.g. 'limited time', 'act now', 'account suspended'), "
+            "and coordinated inauthentic behavior designed to deceive viewers.\n"
+            "DO NOT flag content solely for being promotional, opinionated, or low-quality "
+            "unless it also exhibits the deceptive patterns above.\n\n"
+            "Given the above definition, is this video a scam? "
+            "Check the video frames, title, and description for deceptive patterns. "
+            "Answer Yes/No followed by your reasoning in 4-5 sentences."
         )
         content.append({"type": "text", "text": "\n".join(prompt_parts)})
 
@@ -297,13 +311,40 @@ Analyze this image for scam indicators and explain how the visual content relate
             return_tensors="pt",
         ).to(self.device)
 
-        generated_ids = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+        outputs = self.model.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            return_dict_in_generate=True,
+            output_scores=True,
+        )
+
         generated_ids_trimmed = [
-            out_ids[len(in_ids):] for in_ids, out_ids in zip(inputs.input_ids, generated_ids)
+            out_ids[len(in_ids):]
+            for in_ids, out_ids in zip(inputs.input_ids, outputs.sequences)
         ]
-        return self.processor.batch_decode(
+        verdict_text = self.processor.batch_decode(
             generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
         )[0]
+
+        # --- Logit-based confidence ---
+        # outputs.scores[0] holds logits over the full vocabulary for the FIRST generated token.
+        # We compare the logit for "Yes" vs "No" to get a calibrated probability.
+        confidence_pct = None
+        try:
+            first_token_logits = outputs.scores[0][0].float()  # (vocab_size,)
+            yes_ids = self.processor.tokenizer.encode("Yes", add_special_tokens=False)
+            no_ids  = self.processor.tokenizer.encode("No",  add_special_tokens=False)
+            if yes_ids and no_ids:
+                yes_logit = first_token_logits[yes_ids[0]]
+                no_logit  = first_token_logits[no_ids[0]]
+                probs = torch.softmax(torch.stack([yes_logit, no_logit]), dim=0)
+                is_yes = verdict_text.strip().lower().startswith("yes")
+                # confidence = probability of whichever answer was actually given
+                confidence_pct = (probs[0] if is_yes else probs[1]).item() * 100
+        except Exception:
+            confidence_pct = None
+
+        return verdict_text, confidence_pct
 
     def batch_analyze(self, image_paths, prompt, batch_size=4):
         """

@@ -12,7 +12,7 @@ flowchart TD
         MAX_DUR["⚠ Maximum Duration\nExceeded — 60 s limit"]
         EVAL["Evaluate the Video"]
         VERDICT["Scam or Not?"]
-        REASONING["User Receives\nReasoning"]
+        REASONING["User Receives Verdict,\nConfidence Score & Reasoning"]
         END_NODE(["●  End"])
 
         START    --> UPLOAD
@@ -79,4 +79,4 @@ flowchart TD
 | 5 | Back-End | Text extraction: RapidOCR first; TrOCR for detections < 80 % confident |
 | 6 | Back-End | Audio transcription with Whisper |
 | 7 | Back-End | All inputs merged → Qwen3-VL-2B classification |
-| 8 | Front-End | Display **Scam / Not Scam** verdict + 4–5 sentence reasoning |
+| 8 | Front-End | Display **Scam / Not Scam** verdict + **confidence score (%)** + 4–5 sentence reasoning |

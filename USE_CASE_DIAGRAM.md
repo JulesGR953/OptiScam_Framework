@@ -3,144 +3,123 @@
 ```plantuml
 @startuml OptiScam_UseCaseDiagram
 
-skinparam backgroundColor #050510
-skinparam actorStyle awesome
-
-skinparam actor {
-    BackgroundColor #1a1040
-    BorderColor #7c3aed
-    FontColor #e2e8f0
-}
+skinparam actorStyle stick
+skinparam backgroundColor White
 
 skinparam usecase {
-    BackgroundColor #0f172a
-    BorderColor #6366f1
-    FontColor #e2e8f0
-    ArrowColor #ec4899
+    BackgroundColor White
+    BorderColor Black
+    FontColor Black
+    FontSize 12
 }
 
 skinparam rectangle {
-    BackgroundColor #0a0620
-    BorderColor #4c1d95
-    FontColor #c4b5fd
+    BackgroundColor White
+    BorderColor Black
+    FontColor Black
+    FontSize 11
+}
+
+skinparam arrow {
+    Color Black
+    FontColor Black
+    FontSize 10
 }
 
 ' ─── Actors ──────────────────────────────────────────────────────────────────
-actor "User"            as USER
-actor "YouTube / TikTok\nPlatform"  as PLATFORM   #Orange
-actor "Qwen3-VL-2B\nModel"          as QWEN        #Cyan
-actor "Whisper\nModel"              as WHISPER     #Green
-actor "RapidOCR /\nTrOCR"          as OCR         #Pink
+actor "User" as USER
+
+' ─── External systems (outside boundary) ─────────────────────────────────────
+rectangle "CLAHE\npipeline" as CLAHE
+rectangle "Qwen3-VL"        as QWEN
+rectangle "Backend"         as BACKEND
+actor     "Administrator"   as ADMIN
 
 ' ─── System boundary ─────────────────────────────────────────────────────────
 rectangle "OptiScam System" {
 
-    ' ── Primary use cases ──
-    usecase "Upload Video File"             as UC_UPLOAD
-    usecase "Paste YouTube / TikTok Link"   as UC_LINK
-    usecase "Enter Video Title"             as UC_TITLE
-    usecase "Enter Video Description"       as UC_DESC
-    usecase "Toggle Holistic Mode"          as UC_HOLISTIC
-    usecase "Submit for Analysis"           as UC_SUBMIT
-    usecase "View Analysis Results"         as UC_RESULTS
-    usecase "View Audio Transcript"         as UC_TRANSCRIPT
-    usecase "View OCR Text Timeline"        as UC_OCR_VIEW
-    usecase "Analyze Another Video"         as UC_RESET
+    usecase "Home page"                         as UC_HOME
+    usecase "Video upload,\nmanual metadata input" as UC_UPLOAD
+    usecase "Link submission"                   as UC_LINK
+    usecase "Pre Processing"                    as UC_PRE
+    usecase "Frame Sampling"                    as UC_FRAME
+    usecase "Reasoning"                         as UC_REASON
+    usecase "Scam Inference"                    as UC_INFER
+    usecase "Confidence Score"                  as UC_CONF
+    usecase "Output analysis"                   as UC_OUT
+    usecase "Performance metrics"               as UC_PERF
 
-    ' ── System use cases ──
-    usecase "Validate Video / Metadata"     as UC_VALIDATE
-    usecase "Download Video via yt-dlp"     as UC_DOWNLOAD
-    usecase "Extract Frames (CLAHE)"        as UC_FRAMES
-    usecase "Transcribe Audio"              as UC_AUDIO
-    usecase "Extract On-Screen Text"        as UC_TEXT
-    usecase "Apply TrOCR Fallback\n(< 80% confidence)" as UC_TROCR
-    usecase "Classify Video\n(Scam / Not Scam)"         as UC_CLASSIFY
-    usecase "Generate Verdict + Reasoning"  as UC_VERDICT
-    usecase "Show Thumbnail Preview"        as UC_THUMBNAIL
-    usecase "Poll Job Status"               as UC_POLL
 }
 
-' ─── User associations ───────────────────────────────────────────────────────
-USER --> UC_UPLOAD
-USER --> UC_LINK
-USER --> UC_TITLE
-USER --> UC_DESC
-USER --> UC_HOLISTIC
-USER --> UC_SUBMIT
-USER --> UC_RESULTS
-USER --> UC_TRANSCRIPT
-USER --> UC_OCR_VIEW
-USER --> UC_RESET
+' ─── User → system ───────────────────────────────────────────────────────────
+USER --> UC_HOME
+USER --> UC_REASON
+USER --> UC_INFER
+USER --> UC_CONF
 
-' ─── System internal associations ────────────────────────────────────────────
-UC_SUBMIT       ..> UC_VALIDATE    : <<include>>
-UC_VALIDATE     ..> UC_DOWNLOAD    : <<include>>\n[if URL]
-UC_VALIDATE     ..> UC_FRAMES      : <<include>>
-UC_FRAMES       ..> UC_TEXT        : <<include>>
-UC_FRAMES       ..> UC_AUDIO       : <<include>>
-UC_TEXT         ..> UC_TROCR       : <<extend>>\n[conf < 80%]
-UC_FRAMES       ..> UC_CLASSIFY    : <<include>>
-UC_CLASSIFY     ..> UC_VERDICT     : <<include>>
-UC_SUBMIT       ..> UC_POLL        : <<include>>
-UC_LINK         ..> UC_THUMBNAIL   : <<extend>>
-UC_UPLOAD       ..> UC_THUMBNAIL   : <<extend>>
+' ─── Internal flow (<<Include>>) ─────────────────────────────────────────────
+UC_HOME   ..> UC_UPLOAD : <<Include>>
+UC_HOME   --> UC_LINK
 
-' ─── External actor associations ─────────────────────────────────────────────
-PLATFORM    --> UC_DOWNLOAD
-QWEN        --> UC_CLASSIFY
-WHISPER     --> UC_AUDIO
-OCR         --> UC_TEXT
-OCR         --> UC_TROCR
+UC_UPLOAD ..> UC_PRE    : <<Include>>
+UC_LINK   ..> UC_PRE    : <<Include>>
+
+UC_PRE    ..> UC_FRAME  : <<Include>>
+UC_FRAME  ..> UC_REASON : <<Include>>
+UC_REASON ..> UC_INFER  : <<Include>>
+UC_INFER  ..> UC_CONF   : <<Include>>
+
+UC_CONF   --> UC_OUT
+UC_CONF   --> UC_PERF
+
+' ─── External system connections ─────────────────────────────────────────────
+CLAHE  --  UC_PRE
+QWEN   --  UC_REASON
+
+UC_OUT  --> BACKEND
+UC_OUT  --> ADMIN
+UC_PERF --> ADMIN
 
 @enduml
 ```
 
 ---
 
-> **Tip — render this diagram:**
-> - **VS Code**: install the *PlantUML* extension → right-click → *Preview Current Diagram*
-> - **Online**: paste the `@startuml … @enduml` block at [plantuml.com/plantuml](https://www.plantuml.com/plantuml/uml/)
+> **Render this diagram:**
+> - **VS Code** → install *PlantUML* extension → right-click → *Preview Current Diagram*
+> - **Online** → paste the `@startuml … @enduml` block at [plantuml.com/plantuml](https://www.plantuml.com/plantuml/uml/)
 
 ---
 
-## Use Case Descriptions
+## Use Case Table
 
-### Primary Actor — User
+| # | Use Case | Actor(s) | Description |
+|---|---|---|---|
+| 1 | Home page | User | Entry point — choose upload or link submission |
+| 2 | Video upload, manual metadata input | User | Upload a local video file + optional title & description |
+| 3 | Link submission | User | Paste a YouTube or TikTok URL |
+| 4 | Pre Processing | System, CLAHE pipeline | Frame extraction with sharpness filtering + CLAHE contrast enhancement |
+| 5 | Frame Sampling | System | Evenly subsample up to 6 representative frames |
+| 6 | Reasoning | User, System, Qwen3-VL | Multi-modal inference — frames + title + description → model output |
+| 7 | Scam Inference | User, System | Parse model output → Yes / No verdict |
+| 8 | Confidence Score | User, System | Derive confidence from model reasoning |
+| 9 | Output analysis | System, Backend, Administrator | Persist results (JSON report, summary.txt) |
+| 10 | Performance metrics | System, Administrator | Log frame count, OCR detections, audio segments, language |
 
-| Use Case | Description |
-|---|---|
-| Upload Video File | Drag-and-drop or browse for a local MP4 / MOV / AVI / MKV / WebM file |
-| Paste YouTube / TikTok Link | Enter a public URL; yt-dlp fetches the video, title, and description automatically |
-| Enter Video Title | Optional free-text — passed directly into the model prompt to improve accuracy |
-| Enter Video Description | Optional free-text — same purpose as title |
-| Toggle Holistic Mode | Switches to a lower frame rate suitable for longer videos |
-| Submit for Analysis | Triggers the full backend pipeline |
-| View Analysis Results | Sees the Scam / Not Scam verdict plus 4–5 sentence AI reasoning |
-| View Audio Transcript | Expands the collapsible Whisper transcript panel |
-| View OCR Text Timeline | Expands the collapsible per-frame text detection panel |
-| Analyze Another Video | Resets the UI to start a new job |
+## Relationships
 
-### Secondary Actors — AI Models / Platform
-
-| Actor | Role |
-|---|---|
-| YouTube / TikTok Platform | Source of video, title, description, and thumbnail via yt-dlp |
-| Qwen3-VL-2B Model | Multi-modal vision-language model — produces the final verdict |
-| Whisper Model | OpenAI speech-to-text — transcribes the video audio track |
-| RapidOCR / TrOCR | Detects on-screen text in frames; TrOCR activates when RapidOCR confidence < 80 % |
-
-### Include / Extend relationships
-
-| Relationship | Type | Condition |
+| Relationship | Type | Notes |
 |---|---|---|
-| Submit → Validate Video | `<<include>>` | Always |
-| Validate → Download via yt-dlp | `<<include>>` | Only when a URL was pasted |
-| Validate → Extract Frames | `<<include>>` | Always |
-| Extract Frames → Transcribe Audio | `<<include>>` | Always |
-| Extract Frames → Extract Text | `<<include>>` | Always |
-| Extract Text → TrOCR Fallback | `<<extend>>` | Only when RapidOCR confidence < 80 % |
-| Extract Frames → Classify Video | `<<include>>` | Always |
-| Classify Video → Generate Verdict | `<<include>>` | Always |
-| Submit → Poll Job Status | `<<include>>` | Always (every 3 s until done) |
-| Paste Link → Show Thumbnail | `<<extend>>` | When a valid YouTube URL is detected |
-| Upload File → Show Thumbnail | `<<extend>>` | First frame captured via HTML5 video API |
+| Home page → Video upload | `<<Include>>` | Always available from home |
+| Home page → Link submission | association | Alternative input path |
+| Video upload / Link → Pre Processing | `<<Include>>` | Both paths merge here |
+| Pre Processing ↔ CLAHE pipeline | association | CLAHE is an external processing component |
+| Pre Processing → Frame Sampling | `<<Include>>` | |
+| Frame Sampling → Reasoning | `<<Include>>` | |
+| Reasoning ↔ Qwen3-VL | association | External model actor |
+| Reasoning → Scam Inference | `<<Include>>` | |
+| Scam Inference → Confidence Score | `<<Include>>` | |
+| Confidence Score → Output analysis | association | |
+| Confidence Score → Performance metrics | association | |
+| Output analysis → Backend / Administrator | association | Results stored and reviewed |
+| Performance metrics → Administrator | association | Monitoring |

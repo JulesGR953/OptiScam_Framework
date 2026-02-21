@@ -138,7 +138,7 @@ class OptiScamAnalyzer:
         frame_paths = [f['path'] for f in frame_metadata]
 
         try:
-            verdict = self.vision_model.classify_video(
+            verdict, confidence_pct = self.vision_model.classify_video(
                 image_paths=frame_paths,
                 title=title,
                 description=description,
@@ -146,11 +146,15 @@ class OptiScamAnalyzer:
             results['verdict'] = verdict
             is_scam = verdict.strip().lower().startswith('yes')
             results['is_scam'] = is_scam
-            print(f"  Verdict: {'SCAM' if is_scam else 'NOT SCAM'}\n")
+            results['confidence_score'] = confidence_pct  # float 0-100 or None
+
+            conf_str = f"{confidence_pct:.1f}%" if confidence_pct is not None else "N/A"
+            print(f"  Verdict: {'SCAM' if is_scam else 'NOT SCAM'} | Confidence: {conf_str}\n")
         except Exception as e:
             error_msg = f"Error during classification: {str(e)}"
             results['verdict'] = error_msg
             results['is_scam'] = None
+            results['confidence_score'] = None
             print(f"  Error: {error_msg}\n")
 
         # Step 5: Save results
@@ -216,10 +220,12 @@ class OptiScamAnalyzer:
             f.write("SCAM VERDICT\n")
             f.write("-" * 60 + "\n")
             is_scam = results.get('is_scam')
+            confidence_score = results.get('confidence_score')
+            conf_str = f" (Confidence: {confidence_score:.0f}%)" if confidence_score is not None else ""
             if is_scam is True:
-                f.write("RESULT: YES — This video is likely a scam.\n\n")
+                f.write(f"RESULT: YES — This video is likely a scam.{conf_str}\n\n")
             elif is_scam is False:
-                f.write("RESULT: NO — This video does not appear to be a scam.\n\n")
+                f.write(f"RESULT: NO — This video does not appear to be a scam.{conf_str}\n\n")
             else:
                 f.write("RESULT: UNKNOWN (error during classification)\n\n")
             f.write(results.get('verdict', 'No verdict available') + "\n\n")
