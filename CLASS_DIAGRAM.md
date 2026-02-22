@@ -64,7 +64,7 @@ classDiagram
         +model : AutoImageTextToText
         +processor : AutoProcessor
         +__init__(model_name, device)
-        +classify_video(image_paths, title, description, max_frames, max_new_tokens) str
+        +classify_video(image_paths, title, description, max_frames, max_new_tokens) tuple[str, float|None]
         +analyze_image(image_path, prompt, max_new_tokens) str
         +analyze_frames_for_scams(frame_metadata, custom_prompt) list
         +analyze_video_holistic(video_path, title, description, transcription, ocr_text, max_new_tokens) str
@@ -90,9 +90,9 @@ classDiagram
     OptiScamAnalyzer "1" *-- "1" Qwen3VLModel : owns
     OptiScamAnalyzer ..> PreProcessing : optional use
 
-    note for OptiScamAnalyzer "Entry point via main()\nprocess_video(): default (every 30 frames)\nanalyze_video_holistic(): lower rate (every 60 frames)"
-    note for Qwen3VLModel "Loaded with NF4 quantization via BitsAndBytesConfig\nDefault model: Qwen/Qwen3-VL-2B-Instruct"
-    note for TextExtractor "RapidOCR primary (CPU/ONNX)\nTrOCR fallback on low confidence (GPU)"
+    note for OptiScamAnalyzer "Entry point via main()\nprocess_video(): default (every 30 frames)\nanalyze_video_holistic(): lower rate (every 60 frames)\nResult dict includes: is_scam, verdict, confidence_score"
+    note for Qwen3VLModel "Loaded with NF4 quantization via BitsAndBytesConfig\nDefault model: Qwen/Qwen3-VL-2B-Instruct\nclassify_video() returns (verdict_text, confidence_pct)\nConfidence derived from Yes/No logit probabilities\n(output_scores=True, softmax over Yes vs No tokens)\nScam definition: YouTube Spam/Deceptive Practices policy\n+ TikTok deceptive practices & impersonation policy"
+    note for TextExtractor "RapidOCR primary (CPU/ONNX)\nTrOCR fallback when confidence < 80%"
 ```
 
 ## Data flow
@@ -114,7 +114,11 @@ video_path + title + description
               title,                          evenly subsampled,
               description                     448×448 px cap
           )
-          └── "Yes/No. <4-5 sentence reasoning>"
+          └── (verdict_text, confidence_pct)
+                │                └── float 0–100 from Yes/No logit softmax
+                └── "Yes/No. <4-5 sentence reasoning>"
+                    (scam definition: YouTube & TikTok community guidelines)
 
-verdict + all intermediate data ──▶ analysis_report.json + summary.txt
+is_scam + verdict + confidence_score + all intermediate data
+    ──▶ analysis_report.json + summary.txt
 ```
